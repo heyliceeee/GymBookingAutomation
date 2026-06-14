@@ -1,11 +1,13 @@
 import os
+import re
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.common import TimeoutException
+from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from datetime import datetime
 
 load_dotenv()
 
@@ -62,6 +64,32 @@ def login_automatically():
     except TimeoutException: # Handle timeout exceptions
         print("Class Schedule page not found")
         return False
+def book_class():
+    """
+    Book the next 6pm Tuesday class
+    :return: true if a class was booked, false otherwise
+    """
+    tuesdays = driver.find_elements(By.CSS_SELECTOR, "div[id^='day-group-tue']") # Find all Tuesdays class
+    next_tuesday = tuesdays[0] # Get the first element (the next Tuesday)
+
+    six_pm_class = next_tuesday.find_element(By.CSS_SELECTOR,"div[id$='-1800']") # Find the 6pm class
+
+    name_class = six_pm_class.find_element(By.CSS_SELECTOR, "h3").text # Find the class name
+    id_class = six_pm_class.get_attribute("id") # Get the class ID
+    date_raw = re.search(r"\d{4}-\d{2}-\d{2}", id_class).group(0) # Extract the date from the class ID
+    date_obj = datetime.strptime(date_raw, "%Y-%m-%d") # Convert the date string to a datetime object
+    date_formatted = date_obj.strftime("%b %d") # Format the date as "Jan 01"
+
+    try: # Try to click the "book class" or "join waitlist" button
+        btn = six_pm_class.find_element(By.CSS_SELECTOR, "div.ClassCard_cardActions__tVZBm button") # Find the button
+        btn.click() # Click the button
+        print(f"✅ Booked: {name_class} on Tues, {date_formatted}")
+        return True
+
+    except NoSuchElementException: # Handle exceptions if the button is not found
+        print("❌ Button not found inside the class card")
+        return False
+
 
 login_success = login_automatically() # Call the login_automatically function
 if login_success: # Check if login was successful
@@ -69,6 +97,9 @@ if login_success: # Check if login was successful
 
 else: # If login failed
     print("❌ Login failed")
+
+
+book_success = book_class() # Call the book_class function
 
 # book specific gym classes
 # handle waitlists
