@@ -1,5 +1,7 @@
 import os
 import re
+import time
+
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.common import TimeoutException, NoSuchElementException
@@ -21,6 +23,10 @@ chrome_options.add_argument(f"--user-data-dir={user_data_dir}") # Add the user d
 driver = webdriver.Chrome(options=chrome_options) # Instantiate the driver
 driver.get(GYM_URL) # Navigate to the GYM_URL
 wait = WebDriverWait(driver, 5) # Create a new wait object
+
+booked_count = 0
+waitlisted_count = 0
+already_booked_count = 0
 
 def login_automatically():
     """
@@ -64,10 +70,13 @@ def login_automatically():
     except TimeoutException: # Handle timeout exceptions
         print("Class Schedule page not found")
         return False
-def book_class():
+def book_class(booked_count, waitlisted_count, already_booked_count):
     """
     Book the next 6pm Tuesday class
-    :return: true if a class was booked, false otherwise
+    :param booked_count: Booked class count
+    :param waitlisted_count: Waitlisted class count
+    :param already_booked_count: Already booked/waitlisted class count
+    :return: Updated booked_count, waitlisted_count, already_booked_count
     """
     tuesdays = driver.find_elements(By.CSS_SELECTOR, "div[id^='day-group-tue']") # Find all Tuesdays class
     next_tuesday = tuesdays[0] # Get the first element (the next Tuesday)
@@ -85,24 +94,29 @@ def book_class():
         btn_text = btn.text.lower() # Convert the button text to lowercase
 
         if btn_text == "booked": # Check if the button text is "booked"
-            print(f"✅ Already booked: {name_class} on Tues, {date_formatted}")
+            print(f"ℹ️ Already booked: {name_class} on Tues, {date_formatted}")
+            already_booked_count += 1
 
         elif btn_text == "waitlisted": # Check if the button text is "waitlisted"
-            print(f"✅ Already on waitlist: {name_class} on Tues, {date_formatted}")
+            print(f"ℹ️ Already on waitlist: {name_class} on Tues, {date_formatted}")
+            already_booked_count += 1
 
         elif btn_text == "join waitlist": # Check if the button text is "join waitlist"
             btn.click()  # Click the button
-            print(f"✅ Joined waitlist for: {name_class} on Tues, {date_formatted}")
+            print(f"🟡 Joined waitlist for: {name_class} on Tues, {date_formatted}")
+            waitlisted_count += 1
+            time.sleep(0.5) # Wait for 0.5 seconds
 
         elif btn_text == "book class": # If the button text is neither "booked" nor "waitlisted", it must be "book class"
             btn.click() # Click the button
-            print(f"✅ Booked: {name_class} on Tues, {date_formatted}")
-        return True
+            print(f"✅ Successfully Booked: {name_class} on Tues, {date_formatted}")
+            booked_count += 1
+            time.sleep(0.5)  # Wait for 0.5 seconds
 
     except NoSuchElementException: # Handle exceptions if the button is not found
         print("❌ Button not found inside the class card")
-        return False
 
+    return booked_count, waitlisted_count, already_booked_count
 
 login_success = login_automatically() # Call the login_automatically function
 if login_success: # Check if login was successful
@@ -112,7 +126,14 @@ else: # If login failed
     print("❌ Login failed")
 
 
-book_success = book_class() # Call the book_class function
+booked_count, waitlisted_count, already_booked_count = book_class(booked_count, waitlisted_count, already_booked_count) # Call the book_class function
+
+# Print the booking summary
+print("\n--- BOOKING SUMMARY ---")
+print(f"Classes booked: {booked_count}")
+print(f"Waitlists joined: {waitlisted_count}")
+print(f"Already booked/waitlisted: {already_booked_count}")
+print(f"Total Tuesday 6pm classes processed: {booked_count + waitlisted_count + already_booked_count}")
 
 # book specific gym classes
 # handle waitlists
