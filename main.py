@@ -72,49 +72,56 @@ def login_automatically():
         return False
 def book_class(booked_count, waitlisted_count, already_booked_count):
     """
-    Book the next 6pm Tuesday class
+    Book all 6pm Tuesday and Thursday classes
     :param booked_count: Booked class count
     :param waitlisted_count: Waitlisted class count
     :param already_booked_count: Already booked/waitlisted class count
     :return: Updated booked_count, waitlisted_count, already_booked_count
     """
-    tuesdays = driver.find_elements(By.CSS_SELECTOR, "div[id^='day-group-tue']") # Find all Tuesdays class
-    next_tuesday = tuesdays[0] # Get the first element (the next Tuesday)
+    day_groups = [] # Initialize an empty list to store day groups
+    day_groups += driver.find_elements(By.CSS_SELECTOR, "div[id^='day-group-tue']") # Find all Tuesdays class
+    day_groups += driver.find_elements(By.CSS_SELECTOR, "div[id^='day-group-thu']") # Find all Thursdays class
 
-    six_pm_class = next_tuesday.find_element(By.CSS_SELECTOR,"div[id$='-1800']") # Find the 6pm class
+    for day in day_groups: # Iterate over each day group
+        six_pm_classes = day.find_elements(By.CSS_SELECTOR, "div[id$='-1800']") # Find all 6pm classes on the current day
 
-    name_class = six_pm_class.find_element(By.CSS_SELECTOR, "h3").text # Find the class name
-    id_class = six_pm_class.get_attribute("id") # Get the class ID
-    date_raw = re.search(r"\d{4}-\d{2}-\d{2}", id_class).group(0) # Extract the date from the class ID
-    date_obj = datetime.strptime(date_raw, "%Y-%m-%d") # Convert the date string to a datetime object
-    date_formatted = date_obj.strftime("%b %d") # Format the date as "Jan 01"
+        for six_pm_class in six_pm_classes: # Iterate over each 6pm class
+            name_class = six_pm_class.find_element(By.CSS_SELECTOR, "h3").text # Find the class name
 
-    try: # Try to click the "book class" or "join waitlist" button
-        btn = six_pm_class.find_element(By.CSS_SELECTOR, "div.ClassCard_cardActions__tVZBm button") # Find the button
-        btn_text = btn.text.lower() # Convert the button text to lowercase
+            id_class = six_pm_class.get_attribute("id") # Get the class ID
+            date_raw = re.search(r"\d{4}-\d{2}-\d{2}", id_class).group(0) # Extract the date from the class ID
+            date_obj = datetime.strptime(date_raw, "%Y-%m-%d") # Convert the date string to a datetime object
+            date_formatted = date_obj.strftime("%b %d") # Format the date as "Jan 01"
 
-        if btn_text == "booked": # Check if the button text is "booked"
-            print(f"ℹ️ Already booked: {name_class} on Tues, {date_formatted}")
-            already_booked_count += 1
+            try: # Try to find the button inside the class card
+                btn = six_pm_class.find_element(By.CSS_SELECTOR, "div.ClassCard_cardActions__tVZBm button") # Find the button
+                btn_text = btn.text.lower() # Convert the button text to lowercase
 
-        elif btn_text == "waitlisted": # Check if the button text is "waitlisted"
-            print(f"ℹ️ Already on waitlist: {name_class} on Tues, {date_formatted}")
-            already_booked_count += 1
+                if btn_text == "booked": # Check if the button text is "booked"
+                    print(f"ℹ️ Already booked: {name_class} on {date_formatted}")
+                    already_booked_count += 1
 
-        elif btn_text == "join waitlist": # Check if the button text is "join waitlist"
-            btn.click()  # Click the button
-            print(f"🟡 Joined waitlist for: {name_class} on Tues, {date_formatted}")
-            waitlisted_count += 1
-            time.sleep(0.5) # Wait for 0.5 seconds
+                elif btn_text == "waitlisted": # Check if the button text is "waitlisted"
+                    print(f"ℹ️ Already on waitlist: {name_class} on {date_formatted}")
+                    already_booked_count += 1
 
-        elif btn_text == "book class": # If the button text is neither "booked" nor "waitlisted", it must be "book class"
-            btn.click() # Click the button
-            print(f"✅ Successfully Booked: {name_class} on Tues, {date_formatted}")
-            booked_count += 1
-            time.sleep(0.5)  # Wait for 0.5 seconds
+                elif btn_text == "join waitlist": # Check if the button text is "join waitlist"
+                    btn.click()  # Click the button
+                    print(f"🟡 Joined waitlist for: {name_class} on {date_formatted}")
+                    waitlisted_count += 1
+                    time.sleep(0.5) # Wait for 0.5 seconds
 
-    except NoSuchElementException: # Handle exceptions if the button is not found
-        print("❌ Button not found inside the class card")
+                elif btn_text == "book class": # If the button text is neither "booked" nor "waitlisted", it must be "book class"
+                    btn.click() # Click the button
+                    print(f"✅ Successfully Booked: {name_class} on {date_formatted}")
+                    booked_count += 1
+                    time.sleep(0.5)  # Wait for 0.5 seconds
+
+                else: # Handle other button text cases
+                    print(f"❓ Unknown button state '{btn_text}' for {name_class} on {date_formatted}")
+
+            except NoSuchElementException: # Handle the case where the button is not found
+                print(f"❌ Button not found for {name_class} on {date_formatted}")
 
     return booked_count, waitlisted_count, already_booked_count
 
@@ -134,7 +141,3 @@ print(f"Classes booked: {booked_count}")
 print(f"Waitlists joined: {waitlisted_count}")
 print(f"Already booked/waitlisted: {already_booked_count}")
 print(f"Total Tuesday 6pm classes processed: {booked_count + waitlisted_count + already_booked_count}")
-
-# book specific gym classes
-# handle waitlists
-# deal with network errors like a pro
