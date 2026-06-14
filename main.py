@@ -82,8 +82,21 @@ def book_class():
 
     try: # Try to click the "book class" or "join waitlist" button
         btn = six_pm_class.find_element(By.CSS_SELECTOR, "div.ClassCard_cardActions__tVZBm button") # Find the button
-        btn.click() # Click the button
-        print(f"✅ Booked: {name_class} on Tues, {date_formatted}")
+        btn_text = btn.text.lower() # Convert the button text to lowercase
+
+        if btn_text == "booked": # Check if the button text is "booked"
+            print(f"✅ Already booked: {name_class} on Tues, {date_formatted}")
+
+        elif btn_text == "waitlisted": # Check if the button text is "waitlisted"
+            print(f"✅ Already on waitlist: {name_class} on Tues, {date_formatted}")
+
+        elif btn_text == "join waitlist": # Check if the button text is "join waitlist"
+            btn.click()  # Click the button
+            print(f"✅ Joined waitlist for: {name_class} on Tues, {date_formatted}")
+
+        elif btn_text == "book class": # If the button text is neither "booked" nor "waitlisted", it must be "book class"
+            btn.click() # Click the button
+            print(f"✅ Booked: {name_class} on Tues, {date_formatted}")
         return True
 
     except NoSuchElementException: # Handle exceptions if the button is not found
