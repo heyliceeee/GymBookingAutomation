@@ -1,13 +1,11 @@
 import os
-import re
 import time
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.common import TimeoutException, NoSuchElementException
+from selenium.common import TimeoutException, NoSuchElementException, ElementClickInterceptedException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -32,43 +30,28 @@ def login_automatically():
     Login to the gym automatically
     :return: true if login was successful, false otherwise
     """
-    try: # Try to click the login button
-        login_btn = wait.until(EC.presence_of_element_located((By.ID, "login-button"))) # Wait for the login button to appear
-        login_btn.click() # Click the login button
+    login_btn = wait.until(EC.presence_of_element_located((By.ID, "login-button"))) # Wait for the login button to appear
+    login_btn.click() # Click the login button
 
-    except TimeoutException: # Handle timeout exceptions
-        print("Login button not found")
-        return False
+    email_input = wait.until(EC.presence_of_element_located((By.ID, "email-input"))) # Wait for the email input field to appear
+    email_input.clear() # Clear the email input field
+    email_input.send_keys(os.getenv("ACCOUNT_EMAIL")) # Enter the email address from the .env file
 
+    password_input = wait.until(EC.presence_of_element_located((By.ID, "password-input"))) # Wait for the password input field to appear
+    password_input.clear() # Clear the password input field
+    password_input.send_keys(os.getenv("ACCOUNT_PASSWORD")) # Enter the password from the .env file
 
-    try: # Try to fill in the email and password fields
-        email_input = wait.until(EC.presence_of_element_located((By.ID, "email-input"))) # Wait for the email input field to appear
-        email_input.send_keys(os.getenv("ACCOUNT_EMAIL")) # Enter the email address from the .env file
+    submit_btn = wait.until(EC.presence_of_element_located((By.ID, "submit-button"))) # Wait for the Submit button to appear
+    submit_btn.click() # Click the Submit button
 
-        password_input = wait.until(EC.presence_of_element_located((By.ID, "password-input"))) # Wait for the password input field to appear
-        password_input.send_keys(os.getenv("ACCOUNT_PASSWORD")) # Enter the password from the .env file
-
-    except TimeoutException: # Handle timeout exceptions
-        print("Email or password input fields not found")
-        return False
-
-
-    try: # Try to click the Submit button
-        submit_btn = wait.until(EC.presence_of_element_located((By.ID, "submit-button"))) # Wait for the Submit button to appear
-        submit_btn.click() # Click the Submit button
-
-    except TimeoutException: # Handle timeout exceptions
-        print("Submit button not found")
-        return False
-
-
-    try: # Wait for the "Class Schedule" page to appear
-        wait.until(EC.presence_of_element_located((By.ID, "schedule-page"))) # Wait for the "Class Schedule" page to appear
-        return True
-
-    except TimeoutException: # Handle timeout exceptions
-        print("Class Schedule page not found")
-        return False
+    wait.until(EC.presence_of_element_located((By.ID, "schedule-page"))) # Wait for the "Class Schedule" page to appear
+def click_and_verify(button):
+    """
+    Click a button and verify the button text
+    :param button: button to click
+    """
+    button.click() # Click the button
+    wait.until(lambda d: button.text in ["Booked", "Waitlisted"]) # Wait for the button text to change to "Booked" or "Waitlisted"
 def book_class(booked_count, waitlisted_count, already_booked_count):
     """
     Book all 6pm Tuesday and Thursday classes
@@ -108,18 +91,16 @@ def book_class(booked_count, waitlisted_count, already_booked_count):
             processed_classes.append(f"[Waitlisted] {class_info}")
 
         elif btn_text == "Join Waitlist":  # Check if the button text is "join waitlist"
-            button.click()  # Click the button
+            retry(lambda: click_and_verify(button), description=f"Waitlist {class_info}")  # Call click_and_verify with retries
             print(f"🟡 Joined waitlist for: {class_info}")
             waitlisted_count += 1
             processed_classes.append(f"[New Waitlist] {class_info}")
-            time.sleep(0.5)  # Wait for 0.5 seconds
 
         elif btn_text == "Book Class":  # If the button text is neither "booked" nor "waitlisted", it must be "book class"
-            button.click()  # Click the button
+            retry(lambda: click_and_verify(button), description=f"Booking {class_info}")  # Call click_and_verify with retries
             print(f"✅ Successfully Booked: {class_info}")
             booked_count += 1
             processed_classes.append(f"[New Booking] {class_info}")
-            time.sleep(0.5)  # Wait for 0.5 seconds
 
         else:  # Handle other button text cases
             print(f"❓ Unknown button state '{btn_text}' for {class_info}")
@@ -135,7 +116,7 @@ def check_bookings():
 
     verified_count = 0 # Initialize the counter for verified bookings
 
-    all_cards = driver.find_elements(By.CSS_SELECTOR, "div[id*='card-']") # Find all booking cards
+    all_cards = driver.find_elements(By.CSS_SELECTOR, "div[id^='booking-']") # Find all booking cards
 
     for card in all_cards: # Iterate over each booking card
         try: # Try to find the "When:" paragraph within the card
@@ -150,20 +131,34 @@ def check_bookings():
             continue
 
     return verified_count
+def retry(func, retries=7, description=None):
+    """
+    Retry a function if it fails
+    :param func: a function to retry
+    :param retries: retry count
+    :param description: description of the function
+    :return: function result
+    """
+    for attempt in range(1, retries + 1): # Retry up to retries times
+        try: # Try to execute the function
+            print(f"Attempt {attempt}/{retries} → {description}") # Print the attempt number
+            return func() # Return the function result
 
-login_success = login_automatically() # Call the login_automatically function
-if login_success: # Check if login was successful
-    print("✅ Login successful")
+        except (TimeoutException, NoSuchElementException, ElementClickInterceptedException, Exception) as e:
+            print(f"Failed attempt {attempt}: {e}") # Print the failure message
+            time.sleep(1) # Wait for 1 second before retrying
 
-else: # If login failed
-    print("❌ Login failed")
+    raise Exception(f"❌ All retries failed for: {description}") # If all retries fail, raise an exception
 
-booked_count, waitlisted_count, already_booked_count = book_class(booked_count, waitlisted_count, already_booked_count) # Call the book_class function
+retry(login_automatically, description="Login") # Call the login_automatically function with retries
+
+booked_count, waitlisted_count, already_booked_count = retry(lambda: book_class(booked_count, waitlisted_count, already_booked_count), description="Booking classes") # Call the book_class function with retries
 total_booked = booked_count + waitlisted_count + already_booked_count
 
 print(f"\n--- Total Tuesday/Thursday 6pm classes: {total_booked} ---")
 print("\n--- VERIFYING ON MY BOOKINGS PAGE ---")
-verified_count = check_bookings()
+
+verified_count = retry(check_bookings, description="Check bookings") # Call the check_bookings function with retries
 
 print(f"\n--- VERIFICATION RESULT ---")
 print(f"Expected: {total_booked} bookings")
